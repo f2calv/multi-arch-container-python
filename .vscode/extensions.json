@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "editorconfig.editorconfig",
+    "ms-azuretools.vscode-containers",
+    "ms-vscode-remote.vscode-remote-extensionpack",
+    "davidanson.vscode-markdownlint",
+    "redhat.vscode-yaml",
+    "usernamehw.errorlens",
+    "eamodio.gitlens",
+    "mutantdino.resourcemonitor",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "tamasfe.even-better-toml"
+  ]
+}

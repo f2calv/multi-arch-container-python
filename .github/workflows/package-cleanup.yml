@@ -1,0 +1,23 @@
+name: package-cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        type: boolean
+        description: Log everything that would be deleted without making changes.
+        default: true
+
+permissions: {}
+
+jobs:
+  cleanup:
+    uses: f2calv/gha-workflows/.github/workflows/package-cleanup.yml@v1
+    permissions:
+      packages: write
+    with:
+      packages: multi-arch-container-python
+      older-than: 3 weeks
+      keep-n-tagged: 5
+      exclude-tags: latest,latest-dev
+      dry-run: ${{ github.event_name != 'workflow_dispatch' || inputs.dry-run }}

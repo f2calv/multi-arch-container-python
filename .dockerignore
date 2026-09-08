@@ -1,0 +1,10 @@
+# Deny everything, then explicitly allow only what the build needs. Keeping the
+# build context minimal speeds up `docker build` and stops unrelated file edits
+# (docs, IDE state, .git) from invalidating cached layers.
+*
+
+!pyproject.toml
+!uv.lock
+!README.md
+!appsettings.json
+!src/**
