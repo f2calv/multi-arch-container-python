@@ -29,17 +29,37 @@ ARG APP_NAME=multi-arch-container-python
 
 # -- Dependency layer ----------------------------------------------------------
 # Copy ONLY the files that influence dependency resolution so that editing a .py
-# file reuses the cached install. The WebAssembly target admits universal wheels
-# but no Linux native extensions, keeping this layer portable across all targets.
+# file reuses the cached install.
+#
+# Every runtime dependency ships a pure-Python `py3-none-any` wheel, and asking
+# pip for exactly that tag - platform `any`, ABI `none`, implementation `py` - is
+# what makes this layer architecture-neutral. One resolution on $BUILDPLATFORM is
+# then valid for all three targets, with no emulation and nothing compiled. If a
+# dependency ever stops publishing a universal wheel, this fails loudly here
+# rather than producing an image that crashes on the wrong architecture.
+#
+# uv owns the lockfile, but pip performs the install: uv's --python-platform has
+# no armv7 value, so it cannot express "pure Python only" for all three targets.
+# An earlier revision worked around that by resolving against a WebAssembly
+# target (--python-platform wasm32-pyodide2024) and then grepping site-packages
+# for .so files. That worked, but borrowing a WASM platform as a pure-Python
+# filter is far too surprising for a repository whose purpose is to explain
+# packaging clearly.
 COPY pyproject.toml uv.lock README.md ./
-RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv export --locked --no-dev --no-emit-project --output-file /tmp/requirements.txt && \
-    uv pip install \
-        --target /out/site-packages \
-        --python-platform wasm32-pyodide2024 \
-        --only-binary :all: \
-        --require-hashes \
-        --requirements /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked <<EOF
+set -eux
+uv export --locked --no-dev --no-emit-project --output-file /tmp/requirements.txt
+pip install \
+    --target /out/site-packages \
+    --requirement /tmp/requirements.txt \
+    --require-hashes \
+    --only-binary :all: \
+    --platform any \
+    --abi none \
+    --implementation py \
+    --python-version 3.14 \
+    --no-compile
+EOF
 
 # -- Compile layer -------------------------------------------------------------
 COPY src ./src
@@ -59,10 +79,6 @@ case "${TARGETARCH}${TARGETVARIANT}" in
 esac
 uv build --wheel --out-dir /out
 uv pip install --target /out/site-packages --no-deps /out/multi_arch_container_python-*.whl
-if find /out/site-packages -type f \( -name '*.so' -o -name '*.pyd' -o -name '*.dll' \) -print -quit | grep -q .; then
-    echo "runtime dependencies must not contain architecture-specific native extensions" >&2
-    exit 1
-fi
 EOF
 
 # ------------------------------------------------------------------------------
