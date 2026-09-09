@@ -58,6 +58,36 @@ def test_load_configuration_environment_overrides_file(tmp_path: Path) -> None:
     assert settings.git_repository == "multi-arch-container-python"
 
 
+def test_load_configuration_environment_file_overrides_base(tmp_path: Path) -> None:
+    """Merge an environment-specific file between the base file and environment values."""
+    config_path = tmp_path / "appsettings.json"
+    config_path.write_text(
+        json.dumps({"app": {"greeting": "base", "interval_seconds": 5}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "appsettings.Development.json").write_text(
+        json.dumps({"app": {"greeting": "development"}}),
+        encoding="utf-8",
+    )
+
+    settings = load_configuration(
+        config_path,
+        {
+            "APP_ENVIRONMENT": "Development",
+            "APP__INTERVAL_SECONDS": "10",
+        },
+    )
+
+    assert settings.app.greeting == "development"
+    assert settings.app.interval_seconds == OVERRIDDEN_INTERVAL
+
+
+def test_load_configuration_rejects_unsafe_environment_name(tmp_path: Path) -> None:
+    """Reject path characters in the environment-specific configuration selector."""
+    with pytest.raises(ConfigurationError, match="invalid character"):
+        load_configuration(tmp_path / "appsettings.json", {"APP_ENVIRONMENT": "../secret"})
+
+
 @pytest.mark.parametrize("value", ["0", "3601", "not-an-integer"])
 def test_load_configuration_rejects_invalid_interval(tmp_path: Path, value: str) -> None:
     """Reject malformed and out-of-range worker intervals."""

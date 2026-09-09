@@ -111,14 +111,19 @@ Configuration is layered in ascending order of precedence:
 
 1. Typed dataclass defaults
 2. Optional [`appsettings.json`](appsettings.json)
-3. Environment variables
+3. An optional `appsettings.${APP_ENVIRONMENT}.json` file
+4. Environment variables
+
+`APP_ENVIRONMENT` accepts letters, numbers, hyphens and underscores. When it is unset,
+only the base file is loaded. Production values therefore remain in `appsettings.json`
+without a separate `appsettings.Production.json`.
 
 Invalid types and out-of-range intervals fail startup with a configuration error.
 
 | Key | Environment variable | Default | Description |
 | --- | --- | --- | --- |
 | `app.greeting` | `APP__GREETING` | `Hello from a multi-architecture container` | Message logged each iteration |
-| `app.interval_seconds` | `APP__INTERVAL_SECONDS` | `3` | Delay between iterations |
+| `app.interval_seconds` | `APP__INTERVAL_SECONDS` | `3` | Delay between iterations, from 1 to 3600 seconds |
 | `app.log_format` | `APP__LOG_FORMAT` | `text` | `text` or `json` |
 
 Keys remain snake_case in both files and environment variables, matching the sibling
