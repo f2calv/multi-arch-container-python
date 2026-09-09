@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 CONFIG_FILE: Final = Path("appsettings.json")
 EXIT_SUCCESS: Final = 0
 EXIT_ERROR: Final = 1
+# Open divergence: this is the only sibling with three exit codes. Go and Rust return 0 or 1, and
+# .NET lets the exception propagate. One contract should be agreed across all four.
 EXIT_CONFIGURATION_ERROR: Final = 2
 
 
@@ -35,14 +37,10 @@ def main() -> int:
         return EXIT_CONFIGURATION_ERROR
 
     configure_logging(settings.app)
-    telemetry_error: TelemetryError | None = None
     try:
         telemetry = initialize_telemetry(settings)
-    except TelemetryError as error:
-        telemetry = None
-        telemetry_error = error
-    if telemetry_error is not None:
-        logging.getLogger(__name__).error("telemetry initialization failed: %s", telemetry_error)
+    except TelemetryError:
+        logging.getLogger(__name__).exception("telemetry initialization failed")
         return EXIT_ERROR
 
     stop_event = Event()
