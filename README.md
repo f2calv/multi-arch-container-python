@@ -43,6 +43,11 @@ public [universal workload chart](https://github.com/f2calv/helm-charts/tree/mai
 without native extensions are architecture-neutral, so the build stage runs once on
 `$BUILDPLATFORM`; buildx then resolves the final Python image for each target.
 
+The dependency layer installs the locked graph for a WebAssembly target with binary
+packages required. This selects only universal `py3-none-any` wheels. The build then
+rejects any native extension before copying `site-packages` into the three target
+images.
+
 | Docker platform | `TARGETARCH` | `TARGETVARIANT` | Python artifact | Runtime image |
 | --- | --- | --- | --- | --- |
 | `linux/amd64` | `amd64` | *(empty)* | `py3-none-any` wheel | amd64 CPython |
@@ -90,8 +95,8 @@ contract.
 ## Logging
 
 Python's standard `logging` package provides process-wide logging. Custom formatters
-emit either compact key-value text or newline-delimited JSON without adding a runtime
-dependency.
+emit either compact key-value text or newline-delimited JSON. Application modules
+continue to use standard library loggers when OpenTelemetry is enabled.
 
 | | .NET | Go | Rust | Python |
 | --- | --- | --- | --- | --- |
@@ -104,6 +109,25 @@ Set `APP__LOG_FORMAT=json` to emit JSON:
 ```bash
 docker run --rm -e APP__LOG_FORMAT=json ghcr.io/f2calv/multi-arch-container-python
 ```
+
+### OpenTelemetry
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` to enable batched logs, metrics and traces over
+OTLP/HTTP with Protocol Buffers. Console logging remains enabled in the selected text
+or JSON format. The worker emits a `worker.iteration` span and increments the
+`worker.iterations` counter on every cycle.
+
+```bash
+docker run --rm \
+  -e OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 \
+  -e OTEL_SERVICE_NAME=multi-arch-container-python \
+  -e OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=development \
+  ghcr.io/f2calv/multi-arch-container-python
+```
+
+The exporters honor signal-specific `OTEL_EXPORTER_OTLP_*` variables for endpoints,
+headers, compression, certificates and timeouts. When the base endpoint is absent,
+no OpenTelemetry provider or exporter is initialized.
 
 ## Configuration
 
@@ -270,6 +294,7 @@ flowchart LR
 * [uv projects](https://docs.astral.sh/uv/concepts/projects/)
 * [uv in Docker](https://docs.astral.sh/uv/guides/integration/docker/)
 * [Python logging](https://docs.python.org/3/library/logging.html)
+* [OpenTelemetry Python](https://opentelemetry.io/docs/languages/python/)
 
 ## Further Resources
 
