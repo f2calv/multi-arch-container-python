@@ -1,18 +1,12 @@
 # Multi-Architecture Container Image w/Python
 
-Build a Python application container image for `linux/amd64`, `linux/arm64`, and
-`linux/arm/v7` from a single Dockerfile.
+Build a Python application container image for `linux/amd64`, `linux/arm64`, and `linux/arm/v7` from a single Dockerfile.
 
 ## Introduction
 
-This repository demonstrates the single-Dockerfile approach used to run the same
-worker application on local development machines, edge Kubernetes nodes, and cloud
-container platforms with different processor architectures.
+This repository demonstrates the single-Dockerfile approach used to run the same worker application on local development machines, edge Kubernetes nodes, and cloud container platforms with different processor architectures.
 
-The application intentionally mirrors sibling implementations in C#/.NET, Go, and
-Rust. Keeping their repository layouts, configuration keys, logs, workflows, and
-Dockerfile comments aligned makes language and containerization choices easier to
-compare.
+The application intentionally mirrors sibling implementations in C#/.NET, Go, and Rust. Keeping their repository layouts, configuration keys, logs, workflows, and Dockerfile comments aligned makes language and containerization choices easier to compare.
 
 ## Sibling Repositories
 
@@ -23,30 +17,20 @@ compare.
 | [multi-arch-container-rust](https://github.com/f2calv/multi-arch-container-rust) | Rust | `rust:1-bookworm` | `gcr.io/distroless/cc-debian12:nonroot` | `rustup target` and GNU cross linker |
 | [multi-arch-container-python](https://github.com/f2calv/multi-arch-container-python) | Python 3.14 | `python:3.14-slim-bookworm` + uv | `python:3.14-slim-bookworm` | Architecture-neutral wheel and target-native runtime |
 
-These repositories contain application code only. Kubernetes packaging lives in the
-public [universal workload chart](https://github.com/f2calv/helm-charts/tree/main/charts/workload).
+These repositories contain application code only. Kubernetes packaging lives in the public [universal workload chart](https://github.com/f2calv/helm-charts/tree/main/charts/workload).
 
 ## Goals
 
-* Construct a Python multi-architecture container image with one Dockerfile and
-  `docker buildx`
-* Demonstrate idiomatic structured logging and layered configuration with the same
-  runtime contract in every language
-* Keep Python, uv, lint, type-checking, and test dependencies inside a VS Code
-  devcontainer
-* Use shared GitHub Actions workflows for versioning, validation, image publishing,
-  and releases
+* Construct a Python multi-architecture container image with one Dockerfile and `docker buildx`
+* Demonstrate idiomatic structured logging and layered configuration with the same runtime contract in every language
+* Keep Python, uv, lint, type-checking, and test dependencies inside a VS Code devcontainer
+* Use shared GitHub Actions workflows for versioning, validation, image publishing, and releases
 
 ## Platform Mapping
 
-`docker buildx` injects `TARGETARCH` and `TARGETVARIANT`. Python source and wheels
-without native extensions are architecture-neutral, so the build stage runs once on
-`$BUILDPLATFORM`; buildx then resolves the final Python image for each target.
+`docker buildx` injects `TARGETARCH` and `TARGETVARIANT`. Python source and wheels without native extensions are architecture-neutral, so the build stage runs once on `$BUILDPLATFORM`; buildx then resolves the final Python image for each target.
 
-The dependency layer installs the locked graph for a WebAssembly target with binary
-packages required. This selects only universal `py3-none-any` wheels. The build then
-rejects any native extension before copying `site-packages` into the three target
-images.
+The dependency layer asks pip for the `py3-none-any` wheel tag directly - platform `any`, ABI `none`, implementation `py` - so only universal wheels are installed and one resolution on `$BUILDPLATFORM` is valid for all three targets. If a dependency ever stops publishing a universal wheel the build fails there rather than producing an image that crashes on the wrong architecture.
 
 | Docker platform | `TARGETARCH` | `TARGETVARIANT` | Python artifact | Runtime image |
 | --- | --- | --- | --- | --- |
@@ -54,9 +38,7 @@ images.
 | `linux/arm64` | `arm64` | *(empty)* | `py3-none-any` wheel | arm64 CPython |
 | `linux/arm/v7` | `arm` | `v7` | `py3-none-any` wheel | arm/v7 CPython |
 
-The Dockerfile still validates the three target tokens explicitly. This makes an
-unsupported platform fail clearly instead of producing an image outside the published
-contract.
+The Dockerfile still validates the three target tokens explicitly. This makes an unsupported platform fail clearly instead of producing an image outside the published contract.
 
 ## Anatomy of the Dockerfile
 
@@ -82,21 +64,15 @@ The five ideas worth carrying into other projects:
 
 1. Pin the build stage to `$BUILDPLATFORM` so build tools run natively.
 2. Resolve dependencies before copying frequently changed source files.
-3. Validate `TARGETARCH` and `TARGETVARIANT` as one flat token: `amd64`, `arm64`,
-   or `armv7`.
+3. Validate `TARGETARCH` and `TARGETVARIANT` as one flat token: `amd64`, `arm64`, or `armv7`.
 4. Use a BuildKit cache mount for uv's package cache.
 5. Run the target-native final image as an unprivileged numeric user.
 
-The distroless Python image does not publish an arm/v7 variant. The official
-`python:3.14-slim-bookworm` image is therefore used for all three architectures. It is
-larger and includes a shell, but it preserves the repository's complete platform
-contract.
+The distroless Python image does not publish an arm/v7 variant. The official `python:3.14-slim-bookworm` image is therefore used for all three architectures. It is larger and includes a shell, but it preserves the repository's complete platform contract.
 
 ## Logging
 
-Python's standard `logging` package provides process-wide logging. Custom formatters
-emit either compact key-value text or newline-delimited JSON. Application modules
-continue to use standard library loggers when OpenTelemetry is enabled.
+Python's standard `logging` package provides process-wide logging. Custom formatters emit either compact key-value text or newline-delimited JSON. Application modules continue to use standard library loggers when OpenTelemetry is enabled.
 
 | | .NET | Go | Rust | Python |
 | --- | --- | --- | --- | --- |
@@ -112,10 +88,7 @@ docker run --rm -e APP__LOG_FORMAT=json ghcr.io/f2calv/multi-arch-container-pyth
 
 ### OpenTelemetry
 
-Set `OTEL_EXPORTER_OTLP_ENDPOINT` to enable batched logs, metrics and traces over
-OTLP/HTTP with Protocol Buffers. Console logging remains enabled in the selected text
-or JSON format. The worker emits a `worker.iteration` span and increments the
-`worker.iterations` counter on every cycle.
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` to enable batched logs, metrics and traces over OTLP/HTTP with Protocol Buffers. Console logging remains enabled in the selected text or JSON format. The worker emits a `worker.iteration` span and increments the `worker.iterations` counter on every cycle.
 
 ```bash
 docker run --rm \
@@ -125,9 +98,7 @@ docker run --rm \
   ghcr.io/f2calv/multi-arch-container-python
 ```
 
-The exporters honor signal-specific `OTEL_EXPORTER_OTLP_*` variables for endpoints,
-headers, compression, certificates and timeouts. When the base endpoint is absent,
-no OpenTelemetry provider or exporter is initialized.
+The exporters honor signal-specific `OTEL_EXPORTER_OTLP_*` variables for endpoints, headers, compression, certificates and timeouts. When the base endpoint is absent, no OpenTelemetry provider or exporter is initialized.
 
 ## Configuration
 
@@ -137,10 +108,7 @@ Configuration is layered in ascending order of precedence:
 2. Optional [`appsettings.json`](appsettings.json)
 3. Environment variables
 
-The sibling .NET repository layers one extra source, an optional
-`appsettings.${DOTNET_ENVIRONMENT}.json`, because `Host.CreateApplicationBuilder` provides
-it for free. It is deliberately not reimplemented here - hand-rolling file resolution and
-merge semantics to match a built-in is not a trade worth making in a reference repository.
+The sibling .NET repository layers one extra source, an optional `appsettings.${DOTNET_ENVIRONMENT}.json`, because `Host.CreateApplicationBuilder` provides it for free. It is deliberately not reimplemented here - hand-rolling file resolution and merge semantics to match a built-in is not a trade worth making in a reference repository.
 
 Invalid types and out-of-range intervals fail startup with a configuration error.
 
@@ -150,8 +118,7 @@ Invalid types and out-of-range intervals fail startup with a configuration error
 | `app.interval_seconds` | `APP__INTERVAL_SECONDS` | `3` | Delay between iterations, from 1 to 3600 seconds |
 | `app.log_format` | `APP__LOG_FORMAT` | `text` | `text` or `json` |
 
-Keys remain snake_case in both files and environment variables, matching the sibling
-repositories exactly.
+Keys remain snake_case in both files and environment variables, matching the sibling repositories exactly.
 
 The Dockerfile also bakes build provenance into a flat set of environment variables:
 
@@ -183,8 +150,7 @@ docker buildx imagetools inspect ghcr.io/f2calv/multi-arch-container-python
 
 ## Run on Kubernetes with Helm
 
-The universal `workload` chart deploys this worker through the same framework-neutral
-values used by the sibling repositories. Create `multi-arch-container-python.values.yaml`:
+The universal `workload` chart deploys this worker through the same framework-neutral values used by the sibling repositories. Create `multi-arch-container-python.values.yaml`:
 
 ```yaml
 kind: Deployment
@@ -224,8 +190,7 @@ helm uninstall multi-arch-container-python
 
 ## Self-Build Container Image Locally
 
-Open the repository as a VS Code devcontainer so all Python and validation dependencies
-remain isolated. From the repository root, run either build script:
+Open the repository as a VS Code devcontainer so all Python and validation dependencies remain isolated. From the repository root, run either build script:
 
 ```powershell
 ./build.ps1
@@ -235,17 +200,15 @@ remain isolated. From the repository root, run either build script:
 ./build.sh
 ```
 
-Both scripts are byte-identical across the sibling repositories. Every value is derived
-from Git rather than hard-coded.
+Both scripts are byte-identical across the sibling repositories. Every value is derived from Git rather than hard-coded.
 
-A multi-platform image cannot be loaded into the local Docker image store. The scripts
-therefore build `linux/amd64` with `--load` by default. Export an OCI archive to exercise every target:
+A multi-platform image cannot be loaded into the local Docker image store. The scripts therefore build `linux/amd64` with `--load` by default. Export an OCI archive to exercise every target:
 
 ```bash
 PLATFORM=linux/amd64,linux/arm64,linux/arm/v7 OUTPUT=--output=type=oci,dest=multi-arch-container.tar ./build.sh
 ```
 
-## Build and Test Commands
+## Build & Test Commands
 
 Run these commands inside the devcontainer:
 
@@ -265,12 +228,9 @@ uv run --no-sync pytest
 uv run --no-sync multi-arch-container-python
 ```
 
-## Run All Four Side by Side
+## Run All Four Side By Side
 
-The sibling .NET repository owns the cross-repository
-[`docker-compose.yml`](https://github.com/f2calv/multi-arch-container-dotnet/blob/main/docker-compose.yml).
-Clone all four repositories beside one another, then run `docker compose up --build`
-from the .NET repository.
+The sibling .NET repository owns the cross-repository [`docker-compose.yml`](https://github.com/f2calv/multi-arch-container-dotnet/blob/main/docker-compose.yml). Clone all four repositories beside one another, then run `docker compose up --build` from the .NET repository.
 
 ## Deployment Flow
 
@@ -286,7 +246,7 @@ flowchart LR
     class L,V,A,I,R f2calv
 ```
 
-## Docker, Container, and Python Resources
+## Docker, Container & Python Resources
 
 * [Docker multi-platform builds](https://docs.docker.com/build/building/multi-platform/)
 * [Docker build cache optimization](https://docs.docker.com/build/cache/optimize/)
