@@ -148,13 +148,23 @@ def initialize_telemetry(
 
     log_handler = LoggingHandler(logger_provider=logger_provider)
     log_handler.addFilter(_remove_event_field_marker)
+    # Appended after configure_logging() has installed the console handler, which matters: the
+    # filter below strips the marker from the shared record, so the console handler must have
+    # already formatted it.
     logging.getLogger().addHandler(log_handler)
 
     return Telemetry(log_handler, logger_provider, meter_provider, tracer_provider)
 
 
 def event_fields(**fields: object) -> dict[str, object]:
-    """Create a logging ``extra`` mapping for structured event fields."""
+    """Create a logging ``extra`` mapping for structured event fields.
+
+    Fields are set as top-level attributes on the record so the OTLP bridge exports them as
+    individual attributes rather than one nested blob. A private marker records their names for
+    the console formatters. Field names must therefore avoid the reserved ``LogRecord`` attributes
+    (``message``, ``args``, ``name``, ``module`` and friends), which ``logging`` refuses to
+    overwrite.
+    """
     return {**fields, _EVENT_FIELDS: tuple(fields)}
 
 
