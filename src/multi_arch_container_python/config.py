@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final, cast
@@ -17,7 +16,6 @@ UNKNOWN: Final = "n/a"
 DEFAULT_GREETING: Final = "Hello from a multi-architecture container"
 DEFAULT_INTERVAL_SECONDS: Final = 3
 MAX_INTERVAL_SECONDS: Final = 3600
-_ENVIRONMENT_NAME_PATTERN: Final = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class ConfigurationError(ValueError):
@@ -58,12 +56,14 @@ def load_configuration(
     path: Path,
     environ: Mapping[str, str] | None = None,
 ) -> Settings:
-    """Load defaults, optional base and environment JSON files, then environment overrides."""
+    """Load defaults, an optional JSON file, then environment overrides.
+
+    The sibling .NET repository layers one extra source, an optional
+    ``appsettings.{DOTNET_ENVIRONMENT}.json``, because its host provides that for free. It is
+    deliberately not reimplemented here.
+    """
     environment = os.environ if environ is None else environ
     file_values = _load_json(path)
-    environment_path = _environment_path(path, environment.get("APP_ENVIRONMENT"))
-    if environment_path is not None:
-        file_values = _merge_mappings(file_values, _load_json(environment_path))
     app_values = _mapping_value(file_values.get("app", {}), "app")
 
     greeting = _string_value(
@@ -122,29 +122,6 @@ def _load_json(path: Path) -> Mapping[str, object]:
         raise ConfigurationError(message) from error
 
     return _mapping_value(value, str(path))
-
-
-def _environment_path(path: Path, environment: str | None) -> Path | None:
-    if not environment:
-        return None
-    if _ENVIRONMENT_NAME_PATTERN.fullmatch(environment) is None:
-        message = "APP_ENVIRONMENT contains an invalid character"
-        raise ConfigurationError(message)
-    return path.with_name(f"{path.stem}.{environment}{path.suffix}")
-
-
-def _merge_mappings(
-    base: Mapping[str, object],
-    override: Mapping[str, object],
-) -> Mapping[str, object]:
-    merged = dict(base)
-    for key, value in override.items():
-        existing = merged.get(key)
-        if isinstance(existing, dict) and isinstance(value, dict):
-            merged[key] = _merge_mappings(existing, value)
-        else:
-            merged[key] = value
-    return merged
 
 
 def _mapping_value(value: object, name: str) -> Mapping[str, object]:
