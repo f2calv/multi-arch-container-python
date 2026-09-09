@@ -29,10 +29,17 @@ ARG APP_NAME=multi-arch-container-python
 
 # -- Dependency layer ----------------------------------------------------------
 # Copy ONLY the files that influence dependency resolution so that editing a .py
-# file reuses the cached sync. Runtime dependencies are architecture-neutral.
+# file reuses the cached install. The WebAssembly target admits universal wheels
+# but no Linux native extensions, keeping this layer portable across all targets.
 COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    UV_LINK_MODE=copy uv sync --locked --no-dev --no-install-project
+    uv export --locked --no-dev --no-emit-project --output-file /tmp/requirements.txt && \
+    uv pip install \
+        --target /out/site-packages \
+        --python-platform wasm32-pyodide2024 \
+        --only-binary :all: \
+        --require-hashes \
+        --requirements /tmp/requirements.txt
 
 # -- Compile layer -------------------------------------------------------------
 COPY src ./src
@@ -51,7 +58,11 @@ case "${TARGETARCH}${TARGETVARIANT}" in
     *) echo "unsupported platform: linux/${TARGETARCH}/${TARGETVARIANT}" >&2; exit 1 ;;
 esac
 uv build --wheel --out-dir /out
-uv pip install --target /out/site-packages /out/multi_arch_container_python-*.whl
+uv pip install --target /out/site-packages --no-deps /out/multi_arch_container_python-*.whl
+if find /out/site-packages -type f \( -name '*.so' -o -name '*.pyd' -o -name '*.dll' \) -print -quit | grep -q .; then
+    echo "runtime dependencies must not contain architecture-specific native extensions" >&2
+    exit 1
+fi
 EOF
 
 # ------------------------------------------------------------------------------
@@ -71,7 +82,8 @@ COPY --from=build /out/site-packages /usr/local/lib/python3.14/site-packages
 COPY appsettings.json .
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 
 # -- Provenance ----------------------------------------------------------------
 # Supplied by the CI workflow (.github/workflows/ci.yml) or by build.sh/build.ps1.
