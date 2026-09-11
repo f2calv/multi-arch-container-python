@@ -89,11 +89,13 @@ EOF
 #
 # distroless/python supports amd64 and arm64 but not arm/v7. The official slim
 # image is the smallest maintained Python runtime that supports all three targets.
+# It ships pip, which is the documented exemption to the rule against leaving a
+# package manager in the final image.
 # ------------------------------------------------------------------------------
 FROM python:3.14-slim-bookworm AS final
 WORKDIR /app
 
-COPY --from=build /out/site-packages /usr/local/lib/python3.14/site-packages
+COPY --link --from=build /out/site-packages /usr/local/lib/python3.14/site-packages
 # Base configuration; every value can be overridden by an environment variable at runtime.
 COPY appsettings.json .
 
