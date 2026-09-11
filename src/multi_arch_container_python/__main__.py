@@ -10,7 +10,11 @@ from threading import Event
 from typing import TYPE_CHECKING, Final
 
 from multi_arch_container_python.config import ConfigurationError, load_configuration
-from multi_arch_container_python.telemetry import configure_logging
+from multi_arch_container_python.telemetry import (
+    TelemetryError,
+    configure_logging,
+    initialize_telemetry,
+)
 from multi_arch_container_python.worker import run_worker
 
 if TYPE_CHECKING:
@@ -18,6 +22,9 @@ if TYPE_CHECKING:
 
 CONFIG_FILE: Final = Path("appsettings.json")
 EXIT_SUCCESS: Final = 0
+EXIT_ERROR: Final = 1
+# Open divergence: this is the only sibling with three exit codes. Go and Rust return 0 or 1, and
+# .NET lets the exception propagate. One contract should be agreed across all four.
 EXIT_CONFIGURATION_ERROR: Final = 2
 
 
@@ -30,6 +37,12 @@ def main() -> int:
         return EXIT_CONFIGURATION_ERROR
 
     configure_logging(settings.app)
+    try:
+        telemetry = initialize_telemetry(settings)
+    except TelemetryError:
+        logging.getLogger(__name__).exception("telemetry initialization failed")
+        return EXIT_ERROR
+
     stop_event = Event()
 
     def request_shutdown(_signum: int, _frame: FrameType | None) -> None:
@@ -39,7 +52,11 @@ def main() -> int:
     signal.signal(signal.SIGTERM, request_shutdown)
 
     logging.getLogger(__name__).info("Hit Ctrl-C to exit....")
-    run_worker(stop_event, settings)
+    try:
+        run_worker(stop_event, settings)
+    finally:
+        if telemetry is not None:
+            telemetry.shutdown()
     return EXIT_SUCCESS
 
 

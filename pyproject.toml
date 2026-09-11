@@ -8,7 +8,10 @@ license = "MIT"
 authors = [
   { name = "f2calv" },
 ]
-dependencies = []
+dependencies = [
+  "opentelemetry-exporter-otlp-proto-http==1.44.0",
+  "opentelemetry-sdk==1.44.0",
+]
 
 [project.scripts]
 multi-arch-container-python = "multi_arch_container_python.__main__:main"

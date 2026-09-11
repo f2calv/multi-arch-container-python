@@ -56,7 +56,12 @@ def load_configuration(
     path: Path,
     environ: Mapping[str, str] | None = None,
 ) -> Settings:
-    """Load defaults, an optional JSON file, then environment overrides."""
+    """Load defaults, an optional JSON file, then environment overrides.
+
+    The sibling .NET repository layers one extra source, an optional
+    ``appsettings.{DOTNET_ENVIRONMENT}.json``, because its host provides that for free. It is
+    deliberately not reimplemented here.
+    """
     environment = os.environ if environ is None else environ
     file_values = _load_json(path)
     app_values = _mapping_value(file_values.get("app", {}), "app")

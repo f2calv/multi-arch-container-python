@@ -29,10 +29,37 @@ ARG APP_NAME=multi-arch-container-python
 
 # -- Dependency layer ----------------------------------------------------------
 # Copy ONLY the files that influence dependency resolution so that editing a .py
-# file reuses the cached sync. Runtime dependencies are architecture-neutral.
+# file reuses the cached install.
+#
+# Every runtime dependency ships a pure-Python `py3-none-any` wheel, and asking
+# pip for exactly that tag - platform `any`, ABI `none`, implementation `py` - is
+# what makes this layer architecture-neutral. One resolution on $BUILDPLATFORM is
+# then valid for all three targets, with no emulation and nothing compiled. If a
+# dependency ever stops publishing a universal wheel, this fails loudly here
+# rather than producing an image that crashes on the wrong architecture.
+#
+# uv owns the lockfile, but pip performs the install: uv's --python-platform has
+# no armv7 value, so it cannot express "pure Python only" for all three targets.
+# An earlier revision worked around that by resolving against a WebAssembly
+# target (--python-platform wasm32-pyodide2024) and then grepping site-packages
+# for .so files. That worked, but borrowing a WASM platform as a pure-Python
+# filter is far too surprising for a repository whose purpose is to explain
+# packaging clearly.
 COPY pyproject.toml uv.lock README.md ./
-RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    UV_LINK_MODE=copy uv sync --locked --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked <<EOF
+set -eux
+uv export --locked --no-dev --no-emit-project --output-file /tmp/requirements.txt
+pip install \
+    --target /out/site-packages \
+    --requirement /tmp/requirements.txt \
+    --require-hashes \
+    --only-binary :all: \
+    --platform any \
+    --abi none \
+    --implementation py \
+    --python-version 3.14 \
+    --no-compile
+EOF
 
 # -- Compile layer -------------------------------------------------------------
 COPY src ./src
@@ -51,7 +78,7 @@ case "${TARGETARCH}${TARGETVARIANT}" in
     *) echo "unsupported platform: linux/${TARGETARCH}/${TARGETVARIANT}" >&2; exit 1 ;;
 esac
 uv build --wheel --out-dir /out
-uv pip install --target /out/site-packages /out/multi_arch_container_python-*.whl
+uv pip install --target /out/site-packages --no-deps /out/multi_arch_container_python-*.whl
 EOF
 
 # ------------------------------------------------------------------------------
@@ -62,16 +89,19 @@ EOF
 #
 # distroless/python supports amd64 and arm64 but not arm/v7. The official slim
 # image is the smallest maintained Python runtime that supports all three targets.
+# It ships pip, which is the documented exemption to the rule against leaving a
+# package manager in the final image.
 # ------------------------------------------------------------------------------
 FROM python:3.14-slim-bookworm AS final
 WORKDIR /app
 
-COPY --from=build /out/site-packages /usr/local/lib/python3.14/site-packages
+COPY --link --from=build /out/site-packages /usr/local/lib/python3.14/site-packages
 # Base configuration; every value can be overridden by an environment variable at runtime.
 COPY appsettings.json .
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 
 # -- Provenance ----------------------------------------------------------------
 # Supplied by the CI workflow (.github/workflows/ci.yml) or by build.sh/build.ps1.

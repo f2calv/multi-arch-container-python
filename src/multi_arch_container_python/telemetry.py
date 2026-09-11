@@ -6,15 +6,31 @@ import json
 import logging
 import os
 import sys
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final, cast
 
-from multi_arch_container_python.config import AppConfig, LogFormat
+from opentelemetry import _logs, metrics, trace
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from multi_arch_container_python.config import UNKNOWN, AppConfig, LogFormat
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-_EVENT_FIELDS: Final = "event_fields"
+    from multi_arch_container_python.config import Settings
+
+APP_NAME: Final = "multi-arch-container-python"
+_EVENT_FIELDS: Final = "_event_fields"
 _LOG_LEVELS: Final = {
     "debug": logging.DEBUG,
     "info": logging.INFO,
@@ -22,6 +38,32 @@ _LOG_LEVELS: Final = {
     "warning": logging.WARNING,
     "error": logging.ERROR,
 }
+
+
+class TelemetryError(Exception):
+    """Raised when OpenTelemetry cannot be initialized."""
+
+
+@dataclass(slots=True)
+class Telemetry:
+    """Own the OpenTelemetry providers that must be flushed during shutdown."""
+
+    log_handler: LoggingHandler
+    logger_provider: LoggerProvider
+    meter_provider: MeterProvider
+    tracer_provider: TracerProvider
+
+    def shutdown(self) -> None:
+        """Detach the log bridge, flush telemetry, and stop every exporter."""
+        logging.getLogger().removeHandler(self.log_handler)
+        self.log_handler.close()
+        try:
+            self.logger_provider.shutdown()
+        finally:
+            try:
+                self.meter_provider.shutdown()
+            finally:
+                self.tracer_provider.shutdown()
 
 
 class JsonFormatter(logging.Formatter):
@@ -68,11 +110,72 @@ def configure_logging(config: AppConfig, environ: Mapping[str, str] | None = Non
     root_logger.addHandler(handler)
 
 
-def event_fields(**fields: object) -> dict[str, Mapping[str, object]]:
-    """Create a logging ``extra`` mapping for structured event fields."""
-    return {_EVENT_FIELDS: fields}
+def initialize_telemetry(
+    settings: Settings,
+    environ: Mapping[str, str] | None = None,
+) -> Telemetry | None:
+    """Add OTLP/HTTP logs, metrics, and traces when an endpoint is configured."""
+    environment = os.environ if environ is None else environ
+    if not environment.get("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip():
+        return None
+
+    try:
+        service_name = environment.get("OTEL_SERVICE_NAME") or APP_NAME
+        service_version = settings.git_tag if settings.git_tag != UNKNOWN else "unknown"
+        resource = Resource.create(
+            {
+                SERVICE_NAME: service_name,
+                SERVICE_VERSION: service_version,
+            }
+        )
+        logger_provider = LoggerProvider(resource=resource, shutdown_on_exit=False)
+        logger_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+
+        meter_provider = MeterProvider(
+            metric_readers=[PeriodicExportingMetricReader(OTLPMetricExporter())],
+            resource=resource,
+            shutdown_on_exit=False,
+        )
+        tracer_provider = TracerProvider(resource=resource, shutdown_on_exit=False)
+        tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    except Exception as error:
+        message = "failed to initialize OpenTelemetry exporters"
+        raise TelemetryError(message) from error
+
+    _logs.set_logger_provider(logger_provider)
+    metrics.set_meter_provider(meter_provider)
+    trace.set_tracer_provider(tracer_provider)
+
+    log_handler = LoggingHandler(logger_provider=logger_provider)
+    log_handler.addFilter(_remove_event_field_marker)
+    # Appended after configure_logging() has installed the console handler, which matters: the
+    # filter below strips the marker from the shared record, so the console handler must have
+    # already formatted it.
+    logging.getLogger().addHandler(log_handler)
+
+    return Telemetry(log_handler, logger_provider, meter_provider, tracer_provider)
+
+
+def event_fields(**fields: object) -> dict[str, object]:
+    """Create a logging ``extra`` mapping for structured event fields.
+
+    Fields are set as top-level attributes on the record so the OTLP bridge exports them as
+    individual attributes rather than one nested blob. A private marker records their names for
+    the console formatters. Field names must therefore avoid the reserved ``LogRecord`` attributes
+    (``message``, ``args``, ``name``, ``module`` and friends), which ``logging`` refuses to
+    overwrite.
+    """
+    return {**fields, _EVENT_FIELDS: tuple(fields)}
 
 
 def _record_fields(record: logging.LogRecord) -> Mapping[str, object]:
-    value = getattr(record, _EVENT_FIELDS, {})
-    return cast("dict[str, object]", value) if isinstance(value, dict) else {}
+    names = getattr(record, _EVENT_FIELDS, ())
+    if not isinstance(names, tuple):
+        return {}
+    return {name: getattr(record, name) for name in cast("tuple[str, ...]", names)}
+
+
+def _remove_event_field_marker(record: logging.LogRecord) -> bool:
+    if hasattr(record, _EVENT_FIELDS):
+        delattr(record, _EVENT_FIELDS)
+    return True

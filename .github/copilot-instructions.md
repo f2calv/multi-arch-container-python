@@ -44,6 +44,8 @@ allow.
 
 ## Container Contract
 
+Detailed Dockerfile conventions live in `.github/instructions/docker.instructions.md`.
+
 * Keep one two-stage `Dockerfile` with stages named `build` and `final`.
 * Pin the build stage to `$BUILDPLATFORM`; do not emulate target architectures for
   pure Python artifacts.
