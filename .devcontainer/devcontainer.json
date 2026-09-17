@@ -22,8 +22,8 @@
       "yqVersion": "latest"
     }
   },
-  "postCreateCommand": "sh ./.devcontainer/postCreateCommand.sh",
-  "postStartCommand": "sh ./.devcontainer/postStartCommand.sh",
+  "postCreateCommand": "bash ./.devcontainer/postCreateCommand.sh",
+  "postStartCommand": "bash ./.devcontainer/postStartCommand.sh",
   "customizations": {
     "vscode": {
       "settings": {
@@ -62,4 +62,6 @@
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.kube,target=/home/vscode/.kube,type=bind",
     "source=multi-arch-container-python-venv,target=${containerWorkspaceFolder}/.venv,type=volume"
   ]
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  // "remoteUser": "root"
 }

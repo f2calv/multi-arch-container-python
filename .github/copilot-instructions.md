@@ -44,6 +44,11 @@ These repositories are **application code only**. Kubernetes packaging lives in 
 - uv owns dependency resolution, locking, synchronisation, execution and builds. Run `uv sync --locked --all-groups` after any dependency change.
 - `.venv` lives on the named Docker volume configured by `devcontainer.json`; never commit it or copy it into an image.
 
+Two devcontainer deviations from the siblings are deliberate:
+
+- **`.devcontainer/Dockerfile`** exists because uv is not present in the base Python image and has no official Feature. Copying the binary from the pinned `ghcr.io/astral-sh/uv` image matches how the production `Dockerfile` obtains it, and Dependabot tracks that pin through the `docker` ecosystem.
+- **`.devcontainer/postCreateCommand.sh`** exists because `.venv` is a named volume that is created root-owned. It takes ownership and then restores the locked environment. The siblings need neither step.
+
 ## Configuration Key Casing
 
 Configuration keys are **snake_case** in both `appsettings.json` and the environment. This is deliberate: it is what the sibling .NET, Go and Rust repositories use, so the same key resolves identically across all four languages. Do not "correct" them to camelCase or PascalCase. The keys themselves are documented in the [README](../README.md#configuration).
