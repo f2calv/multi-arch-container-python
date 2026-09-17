@@ -26,6 +26,33 @@ These repositories contain application code only. Kubernetes packaging lives in 
 * Keep Python, uv, lint, type-checking, and test dependencies inside a VS Code devcontainer
 * Use shared GitHub Actions workflows for versioning, validation, image publishing, and releases
 
+## Project Structure
+
+* `src/multi_arch_container_python/` - application source.
+  * `__main__.py` - entry point; configuration, logging and signal wiring only.
+  * `config.py` - `AppConfig` / `Settings` records and the layered loader.
+  * `telemetry.py` - logging handler installation and the OpenTelemetry bridge.
+  * `worker.py` - the worker loop.
+* `tests/` - unit tests (`test_config.py`, `test_telemetry.py`).
+* `appsettings.json` - base configuration.
+* `pyproject.toml` / `uv.lock` - project metadata, dependencies and the pinned resolution.
+* `.python-version` - the interpreter version, kept in step with `requires-python`.
+* `Dockerfile` - two-stage, multi-architecture build.
+* `.github/workflows/ci.yml` - CI/CD using reusable workflows from [f2calv/gha-workflows](https://github.com/f2calv/gha-workflows).
+* `.devcontainer/` - VS Code devcontainer (Python + uv toolchain). All Python tooling runs in the container; nothing is installed on the host.
+* `build.sh` / `build.ps1` - local build scripts for manual testing.
+
+## Technology Stack
+
+* **Language**: Python (version pinned in `.python-version` and `requires-python`)
+* **Logging**: standard library `logging`, with a text or JSON formatter selected by configuration
+* **Telemetry**: OpenTelemetry SDK, exporting logs, metrics and traces over OTLP/HTTP when an endpoint is configured
+* **Configuration**: standard library (`appsettings.json`, then environment variables)
+* **Tooling**: [uv](https://github.com/astral-sh/uv) for dependency resolution and locking, Ruff for formatting and linting, mypy in strict mode, pytest for tests
+* **Container**: Docker (multi-stage, target-native slim final image, non-root)
+* **CI/CD**: GitHub Actions (reusable workflows from [f2calv/gha-workflows](https://github.com/f2calv/gha-workflows))
+* **Versioning**: GitVersion (MainLine mode)
+
 ## Platform Mapping
 
 `docker buildx` injects `TARGETARCH` and `TARGETVARIANT`. Python source and wheels without native extensions are architecture-neutral, so the build stage runs once on `$BUILDPLATFORM`; buildx then resolves the final Python image for each target.

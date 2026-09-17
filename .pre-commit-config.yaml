@@ -10,6 +10,8 @@
 # `pre-commit install` therefore installs a cheaper once-per-push hook instead.
 default_install_hook_types: [pre-push]
 
+# Excluded from EVERY hook. Prefer a per-hook `exclude:` when only one hook is noisy, so
+# the file keeps the rest of its checks.
 exclude: |
   (?x)^(
     \.editorconfig|
@@ -20,6 +22,7 @@ repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
   hooks:
+  #structural validation
   - id: check-xml
   - id: check-yaml
     args: [--allow-multiple-documents]
@@ -28,10 +31,18 @@ repos:
   - id: check-case-conflict
   - id: check-added-large-files
     args: [--maxkb=150]
+  #whitespace hygiene
+  #Note: line endings are owned by .gitattributes (* text=auto eol=lf), which normalises at
+  #the git layer. A mixed-line-ending hook only rewrites worktree bytes git already treats as
+  #identical, so it produces churn on Windows without protecting anything.
   - id: end-of-file-fixer
+    #Note: Visual Studio and VS Code drop the trailing newline when they format JSON on
+    #save, so these files churn on every edit and break CI. Their content is still
+    #validated by check-json5 below - only the newline check is waived.
     exclude: |
       (?x)(
         appsettings.*\.json$|
+        launchSettings\.json$|
         ^\.vscode/.*\.json$
       )
   - id: trailing-whitespace

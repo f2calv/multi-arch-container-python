@@ -1,5 +1,7 @@
 {
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=827846
   "recommendations": [
+    // Common to every multi-arch-container-* repository
     "editorconfig.editorconfig",
     "ms-azuretools.vscode-containers",
     "ms-vscode-remote.vscode-remote-extensionpack",
@@ -8,6 +10,7 @@
     "usernamehw.errorlens",
     "eamodio.gitlens",
     "mutantdino.resourcemonitor",
+    // Language specific
     "ms-python.python",
     "ms-python.vscode-pylance",
     "charliermarsh.ruff",

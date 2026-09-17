@@ -1,61 +1,64 @@
 # Copilot Instructions
 
-## Repository Purpose
+## Shared Instructions
 
-This repository demonstrates a Python worker packaged as one multi-architecture
-container image for `linux/amd64`, `linux/arm64`, and `linux/arm/v7`. It is one of
-four deliberately aligned implementations:
+Shared Copilot instructions, skills and prompts are maintained centrally in the [.github](https://github.com/f2calv/.github) repository, under `.github/instructions/`, `.github/skills/` and `.github/prompts/`. They are deliberately not copied into this repository, so a change there takes effect everywhere without a pull request here.
 
-* [multi-arch-container-dotnet](https://github.com/f2calv/multi-arch-container-dotnet)
-* [multi-arch-container-go](https://github.com/f2calv/multi-arch-container-go)
-* [multi-arch-container-rust](https://github.com/f2calv/multi-arch-container-rust)
-* [multi-arch-container-python](https://github.com/f2calv/multi-arch-container-python)
+To load them, clone that repository and either add it to this VS Code workspace, or link its folders into `~/.copilot/`. Its README explains both.
 
-Any change here must be considered for the other implementations. Keep repository
-layout, Dockerfile stages and comments, provenance variables, configuration keys,
-CI jobs, build scripts, and README headings as close to identical as the languages
-allow.
+If those shared files are not visible, stop and tell the user rather than guessing the conventions — this repository depends on them.
+
+Everything below is specific to this repository.
+
+## Sibling Repositories (alignment is a hard requirement)
+
+Four repositories implement the *same* trivial worker application in four languages:
+
+- [multi-arch-container-dotnet](https://github.com/f2calv/multi-arch-container-dotnet)
+- [multi-arch-container-go](https://github.com/f2calv/multi-arch-container-go)
+- [multi-arch-container-rust](https://github.com/f2calv/multi-arch-container-rust)
+- [multi-arch-container-python](https://github.com/f2calv/multi-arch-container-python) (this one)
+
+Their premise is that a developer fluent in one language can learn another language's containerisation story by diffing two repositories. **Any change made here must be considered for the other three.** Keep the following as close to identical as possible:
+
+- Repository layout and file names.
+- `Dockerfile` stage names (`build`, `final`), section comment banners and ordering.
+- The `ARG`/`ENV` provenance block and OCI `LABEL` block.
+- Environment variable names consumed by the application — both the flat `GIT_*`/`GITHUB_*` provenance variables and the `APP__*` configuration overrides.
+- Application file responsibilities: configuration model, logging setup, worker loop, entry-point wiring.
+- `.github/workflows/ci.yml` job names and structure.
+- `.editorconfig` common section, `.pre-commit-config.yaml`, `.devcontainer/`, `.vscode/extensions.json`.
+- `build.sh` / `build.ps1` are byte-identical (all values are derived from git).
+- `README.md` section headings.
+
+Python convention would normally place the package directly under `src/`. The nested `src/multi_arch_container_python/` layout is used deliberately to mirror the sibling repositories, and is bound to the build backend through `module-name` / `module-root` in `pyproject.toml`. Do not "fix" it.
+
+## No Helm Charts
+
+These repositories are **application code only**. Kubernetes packaging lives in the standalone [f2calv/helm-charts](https://github.com/f2calv/helm-charts) repository, which provides a single multi-purpose chart used by all deployments. Do not reintroduce a `charts/` directory or a `chart` job in `ci.yml`.
 
 ## Development Environment
 
-* Keep every repository-specific dependency inside the VS Code devcontainer.
-* Do not install Python, uv, Ruff, mypy, pytest, pre-commit, or package dependencies
-  on the host.
-* Use Python 3.14 as pinned by `.python-version`.
-* Use uv for dependency resolution, locking, synchronization, execution, and builds.
-* Keep `.venv` on the named Docker volume configured by `devcontainer.json`; never
-  commit or copy it into an image.
-* Run `uv sync --locked --all-groups` after dependency changes.
-* Never auto-install a Git commit hook. Run pre-commit manually, or opt into the
-  lower-frequency pre-push hook.
+- Keep every repository-specific dependency inside the VS Code devcontainer. Do not install Python, uv, Ruff, mypy or pytest on the host.
+- The interpreter version is pinned in `.python-version` and must agree with `requires-python`, `[tool.ruff] target-version` and `[tool.mypy] python_version`. Changing it means changing all four.
+- uv owns dependency resolution, locking, synchronisation, execution and builds. Run `uv sync --locked --all-groups` after any dependency change.
+- `.venv` lives on the named Docker volume configured by `devcontainer.json`; never commit it or copy it into an image.
 
-## Application Contract
+Two devcontainer deviations from the siblings are deliberate:
 
-* Keep entry-point wiring in `__main__.py`, configuration in `config.py`, logging
-  setup in `telemetry.py`, and the loop in `worker.py`.
-* Keep runtime dependencies empty unless the standard library cannot provide the
-  required behavior cleanly.
-* Preserve configuration precedence: defaults, optional `appsettings.json`, then
-  environment variables.
-* Preserve `APP__GREETING`, `APP__INTERVAL_SECONDS`, and `APP__LOG_FORMAT`.
-* Preserve the flat `GIT_*` and `GITHUB_*` provenance environment variables.
-* Keep text and newline-delimited JSON logging behavior aligned with the siblings.
-* Handle SIGINT and SIGTERM and stop the worker promptly.
+- **`.devcontainer/Dockerfile`** exists because uv is not present in the base Python image and has no official Feature. Copying the binary from the pinned `ghcr.io/astral-sh/uv` image matches how the production `Dockerfile` obtains it, and Dependabot tracks that pin through the `docker` ecosystem.
+- **`.devcontainer/postCreateCommand.sh`** exists because `.venv` is a named volume that is created root-owned. It takes ownership and then restores the locked environment. The siblings need neither step.
 
-## Container Contract
+## Configuration Key Casing
 
-Detailed Dockerfile conventions live in `.github/instructions/docker.instructions.md`.
+Configuration keys are **snake_case** in both `appsettings.json` and the environment. This is deliberate: it is what the sibling .NET, Go and Rust repositories use, so the same key resolves identically across all four languages. Do not "correct" them to camelCase or PascalCase. The keys themselves are documented in the [README](../README.md#configuration).
 
-* Keep one two-stage `Dockerfile` with stages named `build` and `final`.
-* Pin the build stage to `$BUILDPLATFORM`; do not emulate target architectures for
-  pure Python artifacts.
-* Validate `amd64`, `arm64`, and `armv7` explicitly.
-* Use a target-native official Python runtime because the distroless Python image
-  does not publish arm/v7.
-* Run the final image as numeric uid/gid 65532.
-* Keep Dockerfile heredocs and all shell files on LF line endings.
-* Do not add Helm charts. Kubernetes packaging belongs in the universal chart
-  repository.
+## Container Conventions
+
+- The final image is a **target-native official Python runtime**, not distroless. `gcr.io/distroless/python` publishes no `linux/arm/v7` manifest, and that is a supported platform here.
+- The `build` stage is pinned to `$BUILDPLATFORM` and does **not** emulate the target, because the artifacts are pure Python and need no cross-compilation.
+- The final image runs as numeric uid/gid `65532`.
+- Validate `amd64`, `arm64` and `armv7` explicitly. `linux/arm/v7` is the leg that breaks when a base image or a wheel is unavailable.
 
 ## Validation
 
@@ -75,3 +78,7 @@ Build the production image after Dockerfile or packaging changes:
 ```bash
 docker buildx build --platform linux/amd64 --load -t multi-arch-container-python:validation .
 ```
+
+## Open Divergence
+
+`__main__.py` returns three exit codes (success, error, configuration error) where Go and Rust return two and .NET lets the exception propagate. This is a known inconsistency across the four siblings; one contract should be agreed rather than each repository drifting further.

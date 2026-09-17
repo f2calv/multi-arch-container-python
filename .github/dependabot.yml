@@ -14,7 +14,9 @@ updates:
       time: "04:00"
 
   - package-ecosystem: docker
-    directory: /
+    directories:
+      - /
+      - /.devcontainer
     schedule:
       interval: weekly
       time: "04:00"
@@ -25,3 +27,9 @@ updates:
       interval: weekly
       time: "04:00"
     open-pull-requests-limit: 10
+
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+      time: "04:00"
