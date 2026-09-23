@@ -208,7 +208,7 @@ Install or upgrade the deployment:
 
 ```bash
 helm upgrade --install multi-arch-container-python oci://ghcr.io/f2calv/charts/workload \
-  --version 1.0.2 \
+  --version 1.1.0 \
   --values multi-arch-container-python.values.yaml
 
 kubectl logs --follow deployment/multi-arch-container-python
