@@ -1,6 +1,7 @@
+# Remove the line below if you want to inherit .editorconfig settings from higher directories
 root = true
 
-#### Common to every file (kept identical across the sibling multi-arch-container-* repositories) ####
+#### Common to every file ####
 
 [*]
 charset = utf-8
@@ -19,6 +20,7 @@ trim_trailing_whitespace = false
 [Makefile]
 indent_style = tab
 
+# Python files
 [*.py]
 max_line_length = 100
 
