@@ -13,9 +13,9 @@ The application intentionally mirrors sibling implementations in C#/.NET, Go, an
 | Repository | Language | Build image | Final image | Target mechanism |
 | --- | --- | --- | --- | --- |
 | [multi-arch-container-dotnet](https://github.com/f2calv/multi-arch-container-dotnet) | C# / .NET 10 | `mcr.microsoft.com/dotnet/sdk:10.0` | `mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled` | `dotnet publish -r <RID>` |
-| [multi-arch-container-go](https://github.com/f2calv/multi-arch-container-go) | Go | `golang:1-bookworm` | `gcr.io/distroless/static-debian12:nonroot` | `GOOS` / `GOARCH` / `GOARM` |
-| [multi-arch-container-rust](https://github.com/f2calv/multi-arch-container-rust) | Rust | `rust:1-bookworm` | `gcr.io/distroless/cc-debian12:nonroot` | `rustup target` and GNU cross linker |
-| [multi-arch-container-python](https://github.com/f2calv/multi-arch-container-python) | Python 3.14 | `python:3.14-slim-bookworm` + uv | `python:3.14-slim-bookworm` | Architecture-neutral wheel and target-native runtime |
+| [multi-arch-container-go](https://github.com/f2calv/multi-arch-container-go) | Go | `golang:1-trixie` | `gcr.io/distroless/static-debian13:nonroot` | `GOOS` / `GOARCH` / `GOARM` |
+| [multi-arch-container-rust](https://github.com/f2calv/multi-arch-container-rust) | Rust | `rust:1-trixie` | `gcr.io/distroless/cc-debian13:nonroot` | `rustup target` and GNU cross linker |
+| [multi-arch-container-python](https://github.com/f2calv/multi-arch-container-python) | Python 3.14 | `python:3.14-slim-trixie` + uv | `python:3.14-slim-trixie` | Architecture-neutral wheel and target-native runtime |
 
 These repositories contain application code only. Kubernetes packaging lives in the public [universal workload chart](https://github.com/f2calv/helm-charts/tree/main/charts/workload).
 
@@ -95,7 +95,7 @@ The five ideas worth carrying into other projects:
 4. Use a BuildKit cache mount for uv's package cache.
 5. Run the target-native final image as an unprivileged numeric user.
 
-The distroless Python image does not publish an arm/v7 variant. The official `python:3.14-slim-bookworm` image is therefore used for all three architectures. It is larger and includes a shell, but it preserves the repository's complete platform contract.
+The distroless Python image does not publish an arm/v7 variant. The official `python:3.14-slim-trixie` image is therefore used for all three architectures. It is larger and includes a shell, but it preserves the repository's complete platform contract.
 
 ## Logging
 
