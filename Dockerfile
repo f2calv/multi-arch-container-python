@@ -20,7 +20,7 @@
 # ------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM ghcr.io/astral-sh/uv:0.12.17 AS uv
 
-FROM --platform=$BUILDPLATFORM python:3.14-slim-bookworm AS build
+FROM --platform=$BUILDPLATFORM python:3.14-slim-trixie AS build
 WORKDIR /src
 
 COPY --from=uv /uv /uvx /usr/local/bin/
@@ -92,7 +92,7 @@ EOF
 # It ships pip, which is the documented exemption to the rule against leaving a
 # package manager in the final image.
 # ------------------------------------------------------------------------------
-FROM python:3.14-slim-bookworm AS final
+FROM python:3.14-slim-trixie AS final
 WORKDIR /app
 
 COPY --link --from=build /out/site-packages /usr/local/lib/python3.14/site-packages
