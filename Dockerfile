@@ -18,7 +18,7 @@
 # build). Python source and pure Python wheels are architecture-neutral, so one
 # native build can be copied into every target-native runtime image without QEMU.
 # ------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM ghcr.io/astral-sh/uv:0.12.17 AS uv
+FROM --platform=$BUILDPLATFORM ghcr.io/astral-sh/uv:0.12.20 AS uv
 
 FROM --platform=$BUILDPLATFORM python:3.14-slim-trixie AS build
 WORKDIR /src
